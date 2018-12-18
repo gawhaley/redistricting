@@ -1,0 +1,17 @@
+Thesis Report - All Work Prior to 30 Nov 2018
+Gareth Whaley
+
+-Literature Search
+
+-Wrote prospectus
+
+-Began composing list of algorithms to include in final product
+
+-Rough outline of greedy beam-search redistricting algorithm
+
+-Searched for applicable redistricting framework
+	-Found bodhisnarkva/redistricter/ - made by Brian
+	 Olson, developer of BDistricting and compactness-
+	 maximizing proposals
+
+-Began code review of bodhisnarkva/redistricter/

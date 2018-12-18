@@ -1,0 +1,11 @@
+Thesis Report - 12 Dec 2018 to 18 Dec 2018
+Gareth Whaley
+
+- Added BDR code to repository
+
+- Filled out code and papers directories
+
+- Continued reading BDR codebase & performing background 
+  dependency research (protobuf especially)
+
+- Finalized installation of BDR dependencies

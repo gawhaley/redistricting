@@ -1,0 +1,441 @@
+Problems with using a Genetic Algorithm for redistricting
+
+I initially formulated the genetic string to be an array, one entry per block, noting which district the block belonged to. Crossover mating on this type was simple. Mutation was easy and I allowed either swapping the district value of two positions or randomly assigning a district to some position.
+
+I used several different variations on measuring the fitness. They all had as components the "moment" of the districts and the inter district population variance.
+
+	The moment is the sum of ((block to district center distance)^2 * block population) across all blocks for the district each is in. A district center is the population weighted average of the positions of the blocks in a district.
+
+	The inter population variance is the sum of the squared differences between the population of each district and the average population of all the districts.
+
+At first I tried to get an overall fitness score by multiplying moment and population variance. Lower scores are better in both components and in the resulting product. It turned out that variance was easier to solve for and the system would get stuck in a local minima where any improvement in moment would result in a relatively nasty degradation in variance. I then tried increasing the importance of moment by exponentiating that term by 2, 3 or 4. With fitness equal to variance * moment^4, I got one trial run to settle down to a nice solution. On another run, I found that I wanted to be able to tune the balance dynamically as it ran. That would not be practical even if I implemented it.
+
+I settled on the solution of mapping each component onto the range (0,1] as appropriate for each population generation. So, find the most fit for moment, the least fit for moment, and scale all moments. Similarly for population variance. The final fitness for an individual is the addition of these scaled values. This method has been successfully running for days, neglecting neither component and moving both towards a better global solution.
+
+But, it's been running for days an the results are mediocre.
+
+Using just the zip code blocks, 1757 for California, or just 366 for New Mexico, the system rapidly settles on a "pretty good" solution. But this solution still has outlier blocks allocated to far away districts. Districts can even be more nastily intermingled, in the case of the Texas data which has been running for a day now.
+
+Ultimately, I think the problem with this method is its lack of concept of a "region". I'm really looking for a region based answer, but I have no concept of a region in the solver. I assumed that the "moment" component would implicitly result in regions, but it seems to not quite be a strong enough influence. I am still running the California full census block data set. At that level of detail this implicit region building may yet happen, but that data set has been running for over 240 hours on a 1.25 GHz G4 processor. I'll leave it running until I write a better, region based, solver.
+
+A couple little optimizations:
+Neglecting the curvature of the earth and using longitudes and latitudes as cartesian coordinates provided a great speed boost. Not taking the square root of distances also provided a great speed boost, and simply biased the system to get those distances down.
+
+2005-01-20 14:44:20 -0800
+
+A region based solver will be able to use the same population variance and moment measures of district-plan fitness, but the solutions will be automatically constrained to be 
+
+
+Census Data URLs:
+http://ftp2.census.gov/census_2000/datasets/Summary_File_1/
+For some state (2 letter abbrev, lower case) "${st}", you just need the ${st}geo_uf1.zip files from Summary File 1. That has the per-block population and lat-lon in it. Download these into subdir 'data/' and preprocess.
+data/
+	${st}geo.uf1	-- what comes inside ${st}geo_uf1.zip . I recommend discarding the .zip and using bzip2 on this after preprocessing.
+	${st}101.uf1	-- `grep 'uSF1  ..101' < ${st}geo.uf1 > ${st}101.uf1` Only the "summary level 101" lines contain block info we want.
+
+http://www2.census.gov/geo/tiger/tiger2005se/
+use the tiger/get.pl script to slurp a state worth of TIGER map data.
+tiger/
+	??/	-- a state's 2 letter abbrev, in upper case
+		zips/	-- where get.pl slurps to
+		zips/url	-- a file that just contains 'http://www2.census.gov/geo/tiger/tiger2004fe/??/' for some state '??', used by get.pl
+		raw/	-- unzip the zips into this dir. from inside zips, `unzip -d ../raw tgr\*.zip`
+
+Can't seem to find 109th congressional districts down to block level.
+http://www.census.gov/geo/www/cd109th/tables109.html
+http://ftp2.census.gov/census_2000/datasets/109_Congressional_Districts/109_CD_HundredPercent/California/cageo_h09.zip
+
+NEW TIGER FORMAT
+http://www.census.gov/geo/www/tiger/
+http://www.census.gov/geo/www/tiger/tgrshp2009/tgrshp2009.html
+http://www.census.gov/geo/www/tiger/tgrshp2009/TGRSHP09.pdf
+started in 2008 but the old format was still working with the census 2000 data, but I'll need to upgrade!
+
+http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf
+
+new format, for new data:
+http://www2.census.gov/geo/tiger/TIGER2009/09_CONNECTICUT/tl_2009_09_tabblock.zip
+
+new format, for census2000 data:
+http://www2.census.gov/geo/tiger/TIGER2009/09_CONNECTICUT/tl_2009_09_tabblock00.zip
+
+http://www2.census.gov/geo/tiger/TIGER2009/25_MASSACHUSETTS/
+http://www2.census.gov/geo/tiger/TIGER2009/25_MASSACHUSETTS/tl_2009_25_tabblock.zip
+http://www2.census.gov/geo/tiger/TIGER2009/25_MASSACHUSETTS/tl_2009_25_tabblock00.zip
+http://www2.census.gov/geo/tiger/TIGER2009/25_MASSACHUSETTS/25017_Middlesex_County/tl_2009_25017_faces.zip
+
+I may be able to get better block-block links information from combining the TFID and reconstructed BlockID from the *_faces.zip topological faces file and the TFIDL,TFIDR from the *_edges.zip all lines file.
+
+*_tabblock00.dbf
+	state		two digit fips code
+	county		three digit code
+	tract		six digit
+	block		four digit
+	blockid		which appears to be the previous four concatenated, 15 digits
+	name		string(10)
+	mtfcc		maf/tiger feature class code
+	ur		urban/rural
+	uace		urban area code
+	funcstat	funcional status
+	aland		land area
+	awater		water area
+	intplat		interior point, lat,lon
+	intplon
+
+*_tabblock.dbf
+	statefp		two digit fips code
+	statens		8 char ansi code
+	countyfp	three digit code
+	statefp00	two digit fips code for 2000 census
+	countyfp00	three digit code for 2000 census
+	tractce00	six digit code for 2000 census
+	blockce00	four digit code for 2000 census
+	suffix1ce	one char suffix to all that
+	blkidfp		char[16] = statefp00+countyfp00+tractce00+blockce00+suffix1ce
+	name		char[11]
+	mtfcc		maf/tiger feature class code
+	ur		urban/rural
+	uace		urban area code
+	funcstat	funcional status
+	aland		land area
+	awater		water area
+	intplat		interior point, lat,lon
+	intplon
+
+And I get the sense from this that the specifics may change for the 2011 release.
+
+
+
+TO DO
+
+use unzip source in C++ utility for unpack/process? ftp://ftp.info-zip.org/pub/infozip/src/
+use Java std library unzip for unpack/process?
+
+Calculate voting-rights-act compliant good-gerrymandering majority-minority districts.
+
+make automatic download/run client (might just be python with a web/cgi thing on
+the server side) to do redistricting@home
+
+http://www.redistrictinggame.com/
+
+Micah Altman's Dissertation
+"Districting Principles and Democratic Representation"
+http://www.hmdc.harvard.edu/micah_altman/disab.shtml
+http://www.hmdc.harvard.edu/micah_altman/dispdf/dis_full.pdf
+
+
+http://scholar.google.com/scholar?q=redistricting+compactness&hl=en&lr=lang_en
+
+
+
+"Nonpartisan Political Redistricting by Computer", 1965. Hess, Weaver,
+Siegfeldt, Whelan
+http://links.jstor.org/sici?sici=0030-364X(196511%2F12)13%3A6%3C998%3ANPRBC%3E2.0.CO%3B2-2
+
+Gordon S. Harrison's review of the 2001 Alaska redistricting by 5 member commission
+http://www.law.duke.edu/shell/cite.pl?23+Alaska+L.+Rev.+51
+
+Alaska's brief history of redistricting is frought with lawsuits over every initially proposed map after the 1970, 1980 and 1990 Censuses.
+
+2010-03-08
+http://www.ombwatch.org/node/10815
+http://rosereport.org/20100308/new-movement-for-redistricting-reform-in-illinois/
+
+who are these people, what do they think?
+http://www.americansforredistrictingreform.org/index.html
+http://www.campaignlegalcenter.org/redistricting.html
+
+http://www.fairdistrictsflorida.org/home.php
+
+maybe the LWV has the contacts I want
+http://www.lwv.org//AM/Template.cfm?Section=Home
+
+http://www.brennancenter.org/content/resource/a_citizens_guide_to_redistricting/
+http://www.brennancenter.org/content/section/category/redistricting/
+
+Indiana Secretary of State Todd Rokita 
+http://www.in.gov/sos/
+http://www.rethinkingredistricting.com/
+
+
+
+clean, run inside data/??/:
+rm -f *.jpg *.png *.mppb *.pb *.links *.dsz drendcmd basicargs handargs makedefaults .make *.uf1 mrun?? measure geometry.pickle ??_start_stats .uf1
+
+TODO: fix Alaska, the map data has longitudes crossing -180 to +180. and if I get really crazy, do polar projections or something.
+
+TODO: overlay the "urban area" data onto my maps.
+http://www2.census.gov/geo/tiger/TIGER2009/tl_2009_us_uac00.zip
+
+TODO: link problem may be due to disjointness in ubids between geo-101 data
+and faces+edges
+
+TODO: project states into something like azimuthal equal distance projection centered over the state  http://trac.osgeo.org/proj/
+
+
+2011-02-10 Thursday 10:24 AM Boston
+I have a first results on 2011 data! It's just 1000 generations of the nearest neighbor solver, so I'm sure I'll do better soon. So far I've run it for NJ and VA. Had to toss the super-fine face+edges based linking and fall back to common-line-segment linking based on the tabblock tiger maps. The faces seem to have lots of 'blocks' that don't exist in the redistricting data. Probably extra detail on water and unpopulated areas.
+
+http://www.redistricting.wa.gov/
+
+
+TODO: try to keep precincts/cities/counties together by imposing a distance penalty on blocks that are part of a region that isn't entirely within the district.
+
+<b>Keep-Together regions</b> (city, county, other). If a region is not wholly within within one district, population in region counts as N miles more away from district centers. (KT region may not encompass more than one district worth of population, probably shouldn't encompass more than (WAG) 70% of a district population.)
+
+<b>Do-Not-Cross lines</b>. If the line from district center to population crosses this line, a N-mile penalty is added to that distance. Apply this to rivers, mountains, other natural or man made well recognized dividing lines. (If the penalty is not high enough there might wind up being just a few people on the far side of it, and that could be weird. Placement and high penalties could result in weird constrained solutions in other ways too.)
+
+http://www.legis.iowa.gov/Resources/Redist/redistricting.aspx
+http://www.house.mo.gov/largemap.aspx
+
+2012-05-28 14:38:05 EDT (Monday, May 28 02:38:05 PM)
+
+TODO: set G+ on the website
+https://plusone.google.com/_/+1/confirm?hl=en&url=${url} 
+
+2013-05-04 16:11:54 EDT (Saturday, May 04 04:11:54 PM)
+
+analyze and render 2013 actual districts
+
+./analyze -P ../../CT/ct.pb -d 5 --csv-solution --loadSolution 09_CT_CD113.txt
+
+drend  --csv-solution 09_CT_CD113.txt -P ct.pb --mppb=CT.mppb --pngout=ct113.png
+
+drend --csv-solution=25_MA_CD113.txt -P=ma.pb --mppb=MA.mppb --pngout=/tmp/MA_us2013.png -d=-1
+
+Make drend easier to use, detecting number of districts from loaded solution. Make district allocation lazy to accommodate this.
+
+~/src/redistricter/render_2013_actual.py --datadir=/Volumes/bulktogo/redata/2010 --districtdir=/Volumes/bulktogo/redata/2010/2013_actual/cd
+~/src/redistricter/render_2013_actual.py --datadir=/Volumes/bulktogo/redata/2010 --districtdir=/Volumes/bulktogo/redata/2010/2013_actual/sldu
+~/src/redistricter/render_2013_actual.py --datadir=/Volumes/bulktogo/redata/2010 --districtdir=/Volumes/bulktogo/redata/2010/2013_actual/sldl
+
+t
+
+~/src/redistricter/analyze -P FL/fl.pb -d=-1 --csv-solution=2013_actual/cd/12_FL_CD113.txt --compare :5,7,8,9,10,11,12,13 --labels total,white,black,native,asian,pacific,other,mixed --dsort 1 --html /tmp/fl.html --notext
+
+~/src/redistricter/analyze_submissions.py --actuals=/Volumes/bulktogo/redata/2010/2013_actual --datadir=/Volumes/bulktogo/redata/2010 --soldir=/Volumes/bulktogo/redata/2010/solutions --report=/Volumes/bulktogo/redata/2010/solutions/report/report.html --outdir=/Volumes/bulktogo/redata/2010/solutions/report --rooturl=/2010/ --rehtml --config=FL_Congress
+
+election data at precinct level:
+http://www.stanford.edu/~jrodden/jrhome_files/electiondata.htm
+http://projects.iq.harvard.edu/eda/data
+
+http://www.washingtonpost.com/blogs/wonkblog/wp/2014/06/03/this-computer-programmer-solved-gerrymandering-in-his-spare-time/
+
+http://www.washingtonpost.com/blogs/wonkblog/wp/2014/10/08/why-drawing-congressional-districts-by-race-is-a-terrible-idea/
+
+2014-12-11 14:45:17 EST (Thursday, December 11 02:45:17 PM)
+
+ftp://alt.ncsbe.gov/enrs/resultsVTD20141104.zip
+ftp://alt.ncsbe.gov/enrs/resultsPCT20141104.zip
+ftp://alt.ncsbe.gov/enrs/pritabulation11xx06xx2012.zip
+
+TODO: draw map tiles projected with http://trac.osgeo.org/proj/
+https://github.com/OSGeo/proj.4
+git clone https://github.com/OSGeo/proj.4.git proj4
+
+render tiles using:
+projection EPSG:900913 'google' aka and more officially epsg:3857
+
+
+20150630
+The Richmond Times-Dispatch opined today [1], citing a recent article [2], that gerrymandering is making voting a pointless act and depressing voter turnout and depressing our democracy. In 600 state elections, 19 incumbents were defeated. In 280 party primaries there were 8 challenges to the incumbent. Voter turnout hovers at 8%.[3]
+
+
+[1] http://www.richmond.com/opinion/our-opinion/article_42f07e65-aeb5-5d2e-bffb-f8cd34261e9a.html#.VYs95v4eYu0.wordpress
+[2] http://www.richmond.com/news/virginia/government-politics/jeff-schapiro/article_784cffac-a447-53c0-afba-e97ecb83aa5d.html
+[3] I haven’t checked these numbers; I assume the original sources are public data; I find these numbers plausible and believable.
+
+http://bdistricting.com/2010/VA/
+
+
+@RTDSchapiro Would some example non-gerrymandered compact district maps help? http://bdistricting.com/2010/VA/
+
+TODO: http://vis4.net/blog/posts/no-more-mercator-tiles/
+
+http://leafletjs.com/
+http://polymaps.org/
+http://openlayers.org/
+http://modestmaps.com/
+http://proj4js.org/
+https://www.mapbox.com/tilemill/
+http://mapnik.org/
+http://en.wikipedia.org/wiki/Albers_projection
+"Albers Equal-Area Conic"
+https://github.com/mapbox/mercantile
+
+2016-01-14 10:23:26 EST (Thursday, January 14 10:23:26 AM)
+
+~/src/redistricter/analyze -P ~/src/redata/2010/OH/oh.pb -d 16 --places ~/src/redata/2010/OH/geoblocks.places --place-names ~/src/redata/2010/OH/st39_oh_places.txt --loadSolution ~/src/redata/2010/solutions/report/OH_Congress/solution.dsz --text -
+
+~/src/redistricter/analyze -P ~/src/redata/2010/OH/oh.pb -d 16 --places ~/src/redata/2010/OH/geoblocks.places --place-names ~/src/redata/2010/OH/st39_oh_places.txt --csv-solution ~/src/redata/2010/2013_actual/cd/OH.csv --text -
+
+
+Pennsylvania constitution on how to draw state legislature districts
+https://en.wikisource.org/wiki/Constitution_of_the_Commonwealth_of_Pennsylvania_1874/Article_2#Section_16:_Senatorial_districts. 
+ 
+Section 16: Senatorial districts.
+The State shall be divided into fifty senatorial districts of compact and contiguous territory, as nearly equal in population as may be, and each district shall be entitled to elect one Senator. Each county containing one or more ratios of population, shall be entitled to one Senator for each ratio, and to an additional Senator for a surplus of population exceeding three-fifths of a ratio, but no county shall form a separate district, unless it shall contain four-fifths of a ratio, except where the adjoining counties are each entitled to one or more Senators, when such county may be assigned a Senator on less than four-fifths and ex
+ceeding one-half of the ratio; and no county shall be divided unless entitled to
+ two or more senators. No city or county shall be entitled to separate represent
+ation exceeding one-sixth of the whole number of Senators. No ward, borough or t
+ownship shall be divided in the formation of a district. The senatorial ratio sh
+all be ascertained by dividing the whole population of the state by the number f
+ifty.
+
+Section 17: Representative districts.
+The members of the House of Representatives shall be apportioned among the several counties, on a ratio obtained by dividing the population of the State as ascertained by the most recent United States census by two hundred. Every county containing less than five ratios shall have one representative for every full ratio, and an additional representative when the surplus exceeds half a ratio; but each county shall have at least one representative. Every county containing five ratios or more shall have one representative for every full ratio. Every city containing a population equal to a ratio, shall elect separately its proportion of the representatives allotted to the county in which it is located. Every city entitled to more than four representatives, and every county having more than one hundred thousand inhabitants shall be divided into districts of compact and contiguous territory, each district to elect its proportion of representatives according to its population, but no district shall elect more than four representatives.  
+
+
+citation in Duke Journal of Constitutional Law & Public Policy, article by Micah Altman and Michael McDonald, http://scholarship.law.duke.edu/djclpp/vol5/iss1/5/ , "The Promise and Perils of Computers in Redistricting", 2010, Vol 5 issue 1
+
+
+2016-02-08 21:03:09 EST (Monday, February 08 09:03:09 PM)
+
+${HOME}/src/redistricter/shapefile.py \
+--csvDist ${HOME}/src/redata/2010/solutions/report/OH_Congress/solution.csv.gz \
+--outlineOut /tmp/outline \
+--verbose \
+${HOME}/src/redata/2010/OH/zips/tl_2010_39_tabblock10.zip
+
+
+2016-03-19 13:39:25 EDT (Saturday, March 19 01:39:25 PM)
+
+git clone https://github.com/OSGeo/proj.4.git proj4
+cd proj4
+./autogen.sh
+./configure --prefix=${PWD}
+make
+
+https://trac.osgeo.org/proj4j/
+https://github.com/Proj4J/proj4j
+git clone https://github.com/Proj4J/proj4j.git proj4j
+cd proj4j/trunk
+mvn install
+#cd proj4j/trunk/src
+#ant
+
+
+
+
+USGS professional paper 1395 (1987) supercedes USGS Bulliten 1532 (1982)
+http://pubs.usgs.gov/pp/1395/report.pdf
+but this appears to all be handilly encoded in PROJ.4
+
+
+ohio (north)
+--proj NAD83:3401
+
+2016-05-09 13:35:04 EDT (Monday, May 09 01:35:04 PM)
+
+xxxxx
+oooxo
+oxoxx
+oxxoo
+xoxxx
+
+
+
+ooxox
+oxoxo
+xxxxx
+xooxo
+xxxxo
+
+2016-08-03 18:29:43 EDT (Wednesday, August 03 06:29:43 PM)
+
+https://www.legislature.ohio.gov/laws/ohio-constitution
+
+2016-11-01 15:37:51 EDT (Tuesday, November 01 03:37:51 PM)
+
+AK=${HOME}/src/redata/2010/AK
+make linkfixup&&./linkfixup --plgeo ${AK}/geoblocks -p ${AK}/ak_base.pb
+./drend -P ${AK}/ak_base.pb -pngout ak_base.png -loadSolution data/2010/solutions/report/AK_Senate/688/solution.dsz -d 20
+
+
+make linkfixup&&./linkfixup --plgeo ${AK}/geoblocks -p ${AK}/ak_laea.pb --proj&&./drend -P ${AK}/ak_laea.pb -pngout ak_laea.png -loadSolution data/2010/solutions/report/AK_Senate/688/solution.dsz -d 20
+
+make linkfixup&&./linkfixup --plgeo ${AK}/geoblocks -p ${AK}/ak_aeqd.pb --proj&&./drend -P ${AK}/ak_aeqd.pb -pngout ak_aeqd.png -loadSolution ${HOME}/src/redata/2010/solutions/report/AK_Senate/688/solution.dsz -d 20
+
+
+2017-03-02 12:28:46 EST (Thursday, March 02 12:28:46 PM)
+
+TODO: try computing a "Fryer & Holden" sum of squared distances - per district measure. sum across districts ( sum of squared distances between all pairs of persons in a district )
+
+algorithmic redistricting papers? Fifield et al. 2015, Holden 2015
+Fifield B, Higgins M, Imai K, Tarr A. 2015. "A new automated redistricting simulator using Markov chain Monte Carlo." Work. Pap., Princeton Univ., Princeton, NJ
+http://imai.princeton.edu/research/files/redist.pdf
+
+lots of citations of prior work in algorithmic redistricting.
+'graph cut' problem. MCMC.
+Somewhat more interested in getting a representative sample of possible district maps than generating one good one.
+
+
+
+
+
+Fryer, R. and Holden, R. (2011). "Measuring the compactness of political districting plans." Journal of Law and Economics 54, 3, 493–535
+http://scholar.harvard.edu/fryer/publications/measuring-compactness-political-districting-plans
+http://scholar.harvard.edu/files/fryer/files/measuring_the_compactness_of_political_districting_plans.pdf
+
+according to Fitfield,Giggins,Imai,Tarr(2015) "develops an approximate algorithm to efficiently compute the minimum of the sum of squared distances"
+
+acknowledges distribution within districts, not just shape geometry!
+tract-level data, not block
+
+sum across districts ( sum of squared distances between all pairs of persons in a district )
+they use that as a numerator with a power diagram (Voronoi) solution they assert is optimal as the denominator.
+
+
+
+
+Holden R. 2015. "A process for non-partisan redistricting." Work Pap., Univ. New South Wales, Sydney, Aust.
+
+
+Harvard Election Data Archive
+http://projects.iq.harvard.edu/eda/home
+https://dataverse.harvard.edu/dataverse/eda
+
+
+https://sites.stanford.edu/sssl/stanford-election-atlas
+
+2017-06-11 13:32:00 EDT (Sunday, June 11 01:32:00 PM)
+
+A test of 'spherical cows on frictionless planes' of gerrymandering science...
+
+Given randomly distributed people of two groups and random but perfect (contiguous, zero inequality) district spatial groupings, what is the distribution of outcomes of districts which prefer one group or the other?
+
+Vary the group population split from 50-50 to 70-30.
+Vary districts from 2-15.
+Try 'clumpy' non-uniform distributions. (e.g. the urban self-packing group)
+
+What's the chance of a MA 9-0 outcome given the MA statewide party registration ratio?
+
+
+Google hilbert curve quad tree sphere spatial indexing
+https://code.google.com/archive/p/s2-geometry-library/source/default/source
+https://github.com/golang/geo
+https://docs.google.com/presentation/d/1Hl4KapfAENAOf4gv-pSngKwvS_jwNVHRPZTTDzXXn6Q/view#slide=id.i148
+http://blog.christianperone.com/2015/08/googles-s2-geometry-on-the-sphere-cells-and-hilbert-curve/
+
+
+2017-07-12 12:25:48 EDT (Wednesday, July 12 12:25:48 PM)
+
+https://www.vox.com/the-big-idea/2017/7/11/15949750/research-gerrymandering-wisconsin-supreme-court-partisanship
+
+wasted vote: either above what was necessary to win, or what was cast for a loser
+efficiency gap: (party a wasted) - (party b wasted) / (all votes)
+
+https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2457468
+
+2017-08-07 20:35:42 EDT (Monday, August 07 08:35:42 PM)
+
+TODO: 'data load with filter' mode; e.g. filter to just include one city or county and make city council or county council districts
+
+17000 core hours in 2011 on 2010 intel core-i7 970
+17000 core hours in 2017 on google compute preemptible high-cpu instances: $130
+
+2017-08-11 14:56:51 EDT (Friday, August 11 02:56:51 PM)
+
+why I should quit population distance to land-area-center: land area is less precise than population counts!
+(see arguments about why 'polsby popper' perimeter-vs-area measure is bogus due to varying level of detail on geographic data)
+

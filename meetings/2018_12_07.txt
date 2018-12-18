@@ -1,0 +1,15 @@
+Thesis Report - 30 Nov 2018 to 12 Dec 2018
+Gareth Whaley
+
+- Majority of time spent on code review of bodhisnarkva/redistricter (BDR)
+
+- Installation & familiarization with Bash on Ubuntu for Windows
+
+- Began installing & researching dependencies for BDR
+
+- Explored options for incorporating BDR into thesis
+  final project
+
+- Built main thesis repository, set up code, data, meeting directories
+
+- Continued review of BDR and dependencies
